@@ -1,0 +1,187 @@
+import json
+import requests
+
+class coinmarketcap:
+    def __init__(self):
+        self.url = "https://pro-api.coinmarketcap.com/v1/cryptocurrency/listings/latest" #VARIABLE CONTAINING THE ENDPOINT
+        #dictionary with the information we want to retrieve
+        self.parameters = { 
+        "start": "1", 
+        "limit": "100",  #change the value to work on more or fewer currencies
+        "convert": "USD"
+        }
+        
+        #dictionary for authentication using the key assigned to us
+        self.headers = {
+            "Accepts": "application/json", #indicate json as the response format
+            "X-CMC_PRO_API_KEY": "YOUR KEY", #insert key
+        }
+
+    def apidata(self): #request to get the data
+        r = requests.get(
+            url=self.url, params=self.parameters, headers=self.headers
+        ).json()
+        return r["data"]
+
+progetto = coinmarketcap() 
+currencies = progetto.apidata() 
+
+dict_report = {} #dictionary for creating the final report
+
+def maximum_volume():
+    '''
+        Find the currency with the highest volume in the last 24 hours and save it in dict_report with key 'max_vol'
+    '''
+    list_volume = [] #contains the volume of all currencies 
+    for elements in currencies:
+        list_volume.append(elements['quote']['USD']['volume_24h']) #copy the volume of all currencies
+    #find the maximum volume within currencies
+    for elements in currencies:
+        if max(list_volume) == elements['quote']['USD']['volume_24h']: 
+            dict_report.setdefault('max_vol', elements['name']) #save the result in the dictionary
+ 
+def top():
+    '''
+        Find the top 10 cryptocurrencies by percentage increase and save them in dict_report with key 'top10'
+    '''
+    list_top = [] #contains the percentage of all currencies with positive increase
+    top10 = [] #indicates the list with the dictionary containing the names and percentages of the currencies after being sorted
+    #find all currencies with positive increase
+    for elements in currencies:
+        if elements['quote']['USD']['percent_change_24h'] > 0:
+            list_top.append(elements['quote']['USD']['percent_change_24h']) #save the percentages of positive currencies
+    #sort list_top to get the values in descending order
+    top10_sorted = sorted(list_top, key=lambda x: float(x), reverse=True) 
+    #save the first 10 sorted values in the 'top10' list
+    for num in top10_sorted[:10]:
+        for elements in currencies: 
+            if num == elements['quote']['USD']['percent_change_24h']:
+                top10.append({
+                    'name' : elements['name'],
+                    'percent' : num
+                })
+    dict_report.setdefault('top10', top10)  #save 'top10' in the dictionary
+    
+def worst(): 
+    '''
+        Find the worst 10 cryptocurrencies by percentage increase and save them in dict_report with key 'worst10'
+    '''
+    list_worst = [] #contains the percentage of all currencies with negative increase
+    worst10=[] #indicates the list with the dictionary containing the names and percentages of the currencies after being sorted
+    #find all currencies with negative increase
+    for elements in currencies:
+        if elements['quote']['USD']['percent_change_24h'] < 0:
+            list_worst.append(elements['quote']['USD']['percent_change_24h']) #save the percentages of negative currencies
+    ##sort list_worst to get the values in descending order 
+    worst_sorted = sorted(list_worst, key=lambda x: float(x))
+    #save the first 10 sorted values in the 'worst10' list
+    for num in worst_sorted[:10]:
+        for elements in currencies:
+            if num == elements['quote']['USD']['percent_change_24h']:
+                worst10.append({
+                    'name': elements['name'],
+                    'percent': num
+                })
+    dict_report.setdefault('worst10', worst10)  #save 'worst10' in the dictionary
+
+def tot():
+    '''
+        Find the amount of money needed to buy one unit of each of the top 20 cryptocurrencies
+    '''
+    list_tot = [] #list containing the price of all currencies 
+    #copy the price of all currencies to 'list_tot'
+    for elements in currencies:
+        list_tot.append(elements['quote']['USD']['price'])
+    dict_report.setdefault('total', (sum(list_tot[:20])))   #save the total needed to buy the top 20 currencies in the dictionary
+
+def total_by_vol():
+    '''
+        Find the amount of money needed to buy one unit of all cryptocurrencies whose volume in the last 24 hours exceeds $76,000,000
+    '''
+    total_by_volume = []  #list containing the volume of all currencies with volume greater than $76,000,000
+    #copy the price of currencies with volume greater than $76,000,000
+    for elements in currencies:
+        if elements['quote']['USD']['volume_24h'] > 76000000:
+            total_by_volume.append(elements['quote']['USD']['price'])
+    dict_report.setdefault('total_by_volume', (sum(total_by_volume))) #save the total in the dictionary
+
+def gain_loss():
+    gain = [] #list containing the values of positive currencies
+    loss = [] #list containing the values of negative currencies  
+    #find among the top 20 currencies, those with a positive and negative percentage increase in the last 24 hours
+    for elements in currencies[:20]:
+        if elements['quote']['USD']['percent_change_24h'] > 0:
+            #save name, percentage, yesterday's price, and the price difference between today and yesterday
+            gain.append({
+                'name': elements['name'],
+                'percent_change' : elements['quote']['USD']['percent_change_24h'],
+                'yprice': (elements['quote']['USD']['price'] * 100) / (elements['quote']['USD']['percent_change_24h'] + 100), #yesterday's price
+                'tot_gain': elements['quote']['USD']['price'] - (elements['quote']['USD']['price'] * 100) / (elements['quote']['USD']['percent_change_24h'] + 100) #difference between today's price - yesterday's price
+            })
+        elif elements['quote']['USD']['percent_change_24h'] < 0:
+            #save name, percentage, yesterday's price, and the price difference between yesterday and today
+            loss.append({
+                'name': elements['name'],
+                'percent_change': elements['quote']['USD']['percent_change_24h'],
+                'yprice' : (elements['quote']['USD']['price'] * 100) / (elements['quote']['USD']['percent_change_24h'] + 100), #yesterday's price
+                'tot_loss': (elements['quote']['USD']['price'] * 100) / (elements['quote']['USD']['percent_change_24h'] + 100) - elements['quote']['USD']['price'] #difference between today's price - yesterday's price
+            })
+    dict_report.setdefault('gain', gain) #save 'gain' in the dictionary
+    dict_report.setdefault('loss', loss) #save 'loss' in the dictionary
+
+def report():
+    '''
+        Save the report with all the results inside dict_report as a json file
+    '''
+    with open("report.json", "w") as outfile: 
+        json.dump(dict_report, outfile)
+
+def menu():
+    '''
+        Menu for printing the results
+    '''
+    while True:
+        print('''
+        1.Cryptocurrency with the highest volume in the last 24 hours
+        2.Top 10
+        3.Worst 10
+        4.Total to buy one unit of each of the top 20 cryptocurrencies
+        5.Total needed to buy one unit of all cryptocurrencies whose volume in the last 24 hours exceeds $76,000,000
+        6.The profit or loss percentage
+        0.EXIT''')
+        req = int(input('Enter choice: '))
+        if req == 1:
+            print('The currency with the largest volume is', dict_report['max_vol'])
+        if req == 2:
+            print('TOP 10')
+            for k in dict_report['top10']:
+                print('-', k['name'], '->', format((k['percent']), '.2f'), '%')
+        if req == 3:
+            print('WORST 10')
+            for k in dict_report['worst10']:
+                print('-', k['name'], '->', format((k['percent']), '.2f'), '%')
+        if req == 4:
+            print('You need', format((dict_report['total']), '.2f'), '$')
+        if req == 5:
+            print('You need', format((dict_report['total_by_volume']), '.2f'), '$')
+        if req == 6:
+            print('\nGAIN:')
+            for k in dict_report['gain']:
+                print('-', k['name'],'->', format((k['percent_change']), '.2f'),'%' )
+                print('Profit after 24h ->', format((k['tot_gain']), '.2f'), '$')
+            print('\nLOSS')
+            for k in dict_report['loss']:
+                print('-', k['name'],format((k['percent_change']), '.2f'), '%')
+                print('Loss after 24h ->', format((k['tot_loss']), '.2f'),'$')
+        if req == 0:
+            return False
+
+#MAIN
+maximum_volume()
+top()
+worst()
+tot()
+total_by_vol()
+gain_loss()
+report()
+menu()
